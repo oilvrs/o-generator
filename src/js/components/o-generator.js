@@ -6,11 +6,14 @@
  * as a clean, symmetric O. Higher resolutions round out into cleaner,
  * more geometric circles.
  *
- * Two modes:
+ * Three modes:
  * - list: every generated O is stacked below the button and can be downloaded as a PNG.
  * - o-mode: every generated O drifts gently inside a 150x180 container, always
  *   avoiding a reserved O-shaped area. The more O's added, the clearer the
  *   negative-space O becomes. The composition can be downloaded as a PNG.
+ * - a5: every generated O is placed on an A5 page in a row-by-row grid, like a
+ *   poster or a periodic table. Every row holds the same number of O's, and
+ *   the O's shrink as more are added so they keep fitting the page.
  *
  * @version 1.0.0
  * @author Oliver Woodhouse <woodhouse.oliver@gmail.com>
@@ -49,6 +52,14 @@ class OGenerator extends HTMLElement {
     // (rx / ry ≈ 1.18) is measured from the reference O. Thickness is slightly
     // bolder than the reference so it still reads among the small O's.
     this.negativeO = { rx: 64, ry: 54, thickness: 6 }
+
+    // A5 mode
+    this.a5W = 148 // A5 width in mm
+    this.a5H = 210 // A5 height in mm
+    this.a5Scale = 6 // Canvas pixels per mm (canvas is 888x1260, also the size of the downloaded PNG)
+    this.a5Margin = 8 // Page margin in mm, kept empty on every side
+    this.a5CellFill = 0.8 // Fraction of each grid cell an O is allowed to fill
+    this.a5Items = [] // Sprites placed on the page, in generation order
   }
 
   /**
@@ -269,19 +280,30 @@ h1 {
   background: #ffffff;
 }
 
+.a5-canvas {
+  display: block;
+  width: 380px; /* A5 shown well under full print size */
+  max-width: 100%;
+  height: auto;
+  aspect-ratio: 148 / 210;
+  border: 1px solid #000000;
+  background: #ffffff;
+}
+
       </style>
 
       <div class="container">
         <div class="inner">
           <div class="header">
-            <h1>O GENERATOR by O liver w OO dh O use</h1>
-            <p class="subtitle">welcome to this wonderful o-generator. the o-generator generates a unique, symmetric o every time you press generate. size, x-axis and y-axis proportions and roundness vary, but each o stays centered on its grid so it always reads as a clean (sort of) symmetrical, typographic o. higher resolutions round out into cleaner, more geometric circles. <br> in LIST MODE every generated o is stacked below and can be downloaded as a png. in O-MODE all o's drift around a 150×180 container and leave an o-shaped negative space in the middle, meaning, the more o's you add, the clearer the O. By O liver w OO dh O use</p>
+            <h1>O GENERATOR by oliver woodhouse</h1>
+            <p class="subtitle">generates a unique, symmetric o every time you press generate. size, x-axis and y-axis proportions and roundness vary, but each o stays centered on its grid so it always reads as a clean, typographic o. higher resolutions round out into cleaner, more geometric circles. in list mode every generated o is stacked below and can be downloaded as a png. in o-mode all o's drift around a 150×180 container and leave an o-shaped negative space in the middle, which gets clearer the more o's you add. in a5 mode every o is placed on an a5 page, row by row, shrinking as more are added so the page fills up like a poster.</p>
           </div>
 
           <div class="submenu" id="modeMenu">
             <span class="submenu-label">mode:</span>
             <button class="mode-btn active" data-mode="list">list</button>
             <button class="mode-btn" data-mode="o-mode">o-mode</button>
+            <button class="mode-btn" data-mode="a5">a5</button>
           </div>
 
           <div class="submenu" id="submenu">
@@ -306,6 +328,16 @@ h1 {
               <span class="omode-count" id="omodeCount">0 o's</span>
             </div>
             <canvas id="omodeCanvas" class="omode-canvas"></canvas>
+          </div>
+
+          <div class="omode hidden" id="a5">
+            <div class="omode-bar">
+              <button class="download-all-btn" id="downloadA5Btn">download image</button>
+              <button class="o-download-btn" id="addTenA5Btn">add 10 o</button>
+              <button class="o-download-btn" id="clearA5Btn">clear</button>
+              <span class="omode-count" id="a5Count">0 o's</span>
+            </div>
+            <canvas id="a5Canvas" class="a5-canvas"></canvas>
           </div>
         </div>
       </div>
@@ -342,27 +374,41 @@ h1 {
     this.shadowRoot.getElementById('addTenBtn').addEventListener('click', () => {
       for (let i = 0; i < 10; i++) this.generateO()
     })
+
+    // A5 mode controls
+    const a5Canvas = this.shadowRoot.getElementById('a5Canvas')
+    a5Canvas.width = this.a5W * this.a5Scale
+    a5Canvas.height = this.a5H * this.a5Scale
+
+    this.shadowRoot.getElementById('downloadA5Btn').addEventListener('click', () => this.downloadA5())
+    this.shadowRoot.getElementById('clearA5Btn').addEventListener('click', () => this.clearA5())
+    this.shadowRoot.getElementById('addTenA5Btn').addEventListener('click', () => {
+      for (let i = 0; i < 10; i++) this.generateO()
+    })
   }
 
   /**
-   * Switches between list mode and o-mode. Each mode keeps its own content,
-   * so switching back and forth does not lose anything.
-   * @param {string} mode - 'list' or 'o-mode'
+   * Switches between list mode, o-mode and a5 mode. Each mode keeps its own
+   * content, so switching back and forth does not lose anything.
+   * @param {string} mode - 'list', 'o-mode' or 'a5'
    * @param {HTMLElement} activeBtn - the clicked submenu button
    * @param {NodeList} allButtons - all mode buttons, for active-state toggling
    */
   setMode(mode, activeBtn, allButtons) {
     this.mode = mode
+    const isList = mode === 'list'
     const isOMode = mode === 'o-mode'
+    const isA5 = mode === 'a5'
 
     allButtons.forEach(b => b.classList.remove('active'))
     activeBtn.classList.add('active')
 
-    this.shadowRoot.getElementById('results').classList.toggle('hidden', isOMode)
+    this.shadowRoot.getElementById('results').classList.toggle('hidden', !isList)
     this.shadowRoot.getElementById('omode').classList.toggle('hidden', !isOMode)
-    this.shadowRoot.getElementById('downloadAllBtn').classList.toggle('hidden', isOMode || this.count === 0)
+    this.shadowRoot.getElementById('a5').classList.toggle('hidden', !isA5)
+    this.shadowRoot.getElementById('downloadAllBtn').classList.toggle('hidden', !isList || this.count === 0)
 
-    // Only animate while o-mode is visible
+    // Only animate while o-mode is visible; a5 is a static layout
     if (isOMode && this.floaters.length > 0) {
       this.requestDraw()
     } else {
@@ -385,6 +431,7 @@ h1 {
     this.shadowRoot.getElementById('results').innerHTML = ''
     this.shadowRoot.getElementById('downloadAllBtn').classList.add('hidden')
     this.clearOMode()
+    this.clearA5()
 
     allButtons.forEach(b => b.classList.remove('active'))
     activeBtn.classList.add('active')
@@ -400,6 +447,11 @@ h1 {
 
     if (this.mode === 'o-mode') {
       this.addFloater(grid)
+      return
+    }
+
+    if (this.mode === 'a5') {
+      this.addA5Item(grid)
       return
     }
 
@@ -498,7 +550,7 @@ h1 {
 
     const ctx = canvas.getContext('2d')
     ctx.clearRect(0, 0, canvas.width, canvas.height) // Transparent background, preserved in the exported PNG
-    ctx.fillStyle = '#d1d0d0'
+    ctx.fillStyle = '#000000'
 
     for (let y = 0; y < size; y++) {
       for (let x = 0; x < size; x++) {
@@ -597,7 +649,7 @@ h1 {
     canvas.width = cellsW
     canvas.height = cellsH
     const ctx = canvas.getContext('2d')
-    ctx.fillStyle = '#a5a5a5'
+    ctx.fillStyle = '#000000'
     cells.forEach(([x, y]) => ctx.fillRect(x - minX, y - minY, 1, 1))
 
     // Evenly spaced sample points along the ring, as fractions of the sprite size (-0.5 to 0.5)
@@ -620,11 +672,12 @@ h1 {
    * even. Below 1 the sprite is scaled down smoothly instead.
    * @param {Object} sprite
    * @param {number} targetSize - wanted size of the O's longest side, logical units
+   * @param {number} pxPerUnit - canvas pixels per logical unit for the target canvas
    * @returns {number} canvas pixels per grid cell
    */
-  pixelScale(sprite, targetSize) {
+  pixelScale(sprite, targetSize, pxPerUnit) {
     const longest = Math.max(sprite.cellsW, sprite.cellsH)
-    const scale = (targetSize * this.renderScale) / longest
+    const scale = (targetSize * pxPerUnit) / longest
     return scale >= 1 ? Math.max(1, Math.round(scale)) : scale
   }
 
@@ -645,7 +698,7 @@ h1 {
     this.floaters.push({
       sprite,
       ...placement,
-      freqX: this.randomBetween(9.1, 4.9), // Slow drift, radians per second
+      freqX: this.randomBetween(0.25, 0.7), // Slow drift, radians per second
       freqY: this.randomBetween(0.25, 0.7),
       phaseX: this.randomBetween(0, Math.PI * 2),
       phaseY: this.randomBetween(0, Math.PI * 2)
@@ -669,12 +722,12 @@ h1 {
     const shrinkSteps = [1, 0.8, 0.62, 0.48, 0.36]
 
     for (const factor of shrinkSteps) {
-      const scale = this.pixelScale(sprite, baseSize * factor)
+      const scale = this.pixelScale(sprite, baseSize * factor, this.renderScale)
       const found = this.tryPlace(sprite, scale, 60, true)
       if (found) return found
     }
 
-    const smallest = this.pixelScale(sprite, baseSize * shrinkSteps[shrinkSteps.length - 1])
+    const smallest = this.pixelScale(sprite, baseSize * shrinkSteps[shrinkSteps.length - 1], this.renderScale)
     return this.tryPlace(sprite, smallest, 200, false)
   }
 
@@ -844,6 +897,110 @@ h1 {
   downloadOMode() {
     const canvas = this.shadowRoot.getElementById('omodeCanvas')
     this.downloadCanvas(canvas, `o-mode_${String(this.floaters.length).padStart(3, '0')}`)
+  }
+
+  /**
+   * Adds a new O to the A5 page and redraws the whole layout, since every
+   * existing O may need to shrink to keep making room.
+   * @param {boolean[][]} grid
+   */
+  addA5Item(grid) {
+    const sprite = this.makeSprite(grid)
+    if (!sprite) return
+
+    this.a5Items.push(sprite)
+    this.drawA5()
+    this.updateA5Count()
+  }
+
+  /**
+   * Works out how many columns and rows the current number of O's needs to
+   * fill the A5 page as evenly as possible, keeping every row the same
+   * length (the last row may be left partially empty).
+   * @param {number} n - number of O's
+   * @returns {Object} { cols, rows }
+   */
+  a5Grid(n) {
+    const aspect = this.a5W / this.a5H
+    const rows = Math.max(1, Math.ceil(Math.sqrt(n / aspect)))
+    const cols = Math.max(1, Math.ceil(n / rows))
+    return { cols, rows }
+  }
+
+  /**
+   * Redraws every O on the A5 page: works out the current row/column grid,
+   * then places each O centered in its cell, scaled to fit. The more O's
+   * there are, the smaller every cell — and therefore every O — becomes.
+   */
+  drawA5() {
+    const canvas = this.shadowRoot.getElementById('a5Canvas')
+    const ctx = canvas.getContext('2d')
+    ctx.clearRect(0, 0, canvas.width, canvas.height) // Transparent background, preserved in the exported PNG
+
+    const n = this.a5Items.length
+    if (n === 0) return
+
+    const { cols, rows } = this.a5Grid(n)
+    const innerW = this.a5W - this.a5Margin * 2
+    const innerH = this.a5H - this.a5Margin * 2
+    const cellW = innerW / cols
+    const cellH = innerH / rows
+    const targetSize = Math.min(cellW, cellH) * this.a5CellFill
+
+    this.a5Items.forEach((sprite, i) => {
+      const row = Math.floor(i / cols)
+      const col = i % cols
+      const centerX = this.a5Margin + col * cellW + cellW / 2
+      const centerY = this.a5Margin + row * cellH + cellH / 2
+
+      const scale = this.pixelScale(sprite, targetSize, this.a5Scale)
+      const dw = sprite.cellsW * scale
+      const dh = sprite.cellsH * scale
+
+      ctx.imageSmoothingEnabled = scale < 1 // Crisp pixels when scaled up, smooth when scaled down
+      ctx.drawImage(
+        sprite.canvas,
+        Math.round(centerX * this.a5Scale - dw / 2),
+        Math.round(centerY * this.a5Scale - dh / 2),
+        dw,
+        dh
+      )
+    })
+  }
+
+  /**
+   * Updates the O counter next to the a5 buttons, including the current grid shape.
+   */
+  updateA5Count() {
+    const n = this.a5Items.length
+    const label = this.shadowRoot.getElementById('a5Count')
+
+    if (n === 0) {
+      label.textContent = `0 o's`
+      return
+    }
+
+    const { cols, rows } = this.a5Grid(n)
+    label.textContent = `${n} o's — ${cols} × ${rows} grid`
+  }
+
+  /**
+   * Removes every O from the A5 page.
+   */
+  clearA5() {
+    this.a5Items = []
+
+    const canvas = this.shadowRoot.getElementById('a5Canvas')
+    canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height)
+    this.updateA5Count()
+  }
+
+  /**
+   * Downloads the current A5 page as a transparent PNG.
+   */
+  downloadA5() {
+    const canvas = this.shadowRoot.getElementById('a5Canvas')
+    this.downloadCanvas(canvas, `a5_${String(this.a5Items.length).padStart(3, '0')}`)
   }
 }
 
