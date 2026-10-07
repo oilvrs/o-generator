@@ -27,49 +27,50 @@
  * @author Oliver Woodhouse <woodhouse.oliver@gmail.com>
  */
 
-import { asciiArt } from '../ascii-art.js'
+import { asciiArt } from "../ascii-art.js";
 
 class OGenerator extends HTMLElement {
   constructor() {
-    super()
-    this.attachShadow({ mode: 'open' })
-    this.gridSize = 32 // Current grid resolution, changeable via the resolution submenu
-    this.displaySize = 256 // Fixed total canvas display size in px (cell size = displaySize / gridSize)
-    this.count = 0 // Number of O's generated so far, at the current resolution
-    this.seen = new Set() // Tracks parameter signatures to avoid exact duplicates
+    super();
+    this.attachShadow({ mode: "open" });
+    this.gridSize = 32; // Current grid resolution, changeable via the resolution submenu
+    this.displaySize = 256; // Fixed total canvas display size in px (cell size = displaySize / gridSize)
+    this.count = 0; // Number of O's generated so far, at the current resolution
+    this.seen = new Set(); // Tracks parameter signatures to avoid exact duplicates
 
     // Higher resolutions get a narrower, lower power range, so the O's
     // round out into cleaner, more geometric circles as pixel count grows.
     this.resolutionConfig = {
       32: { powerMin: 2, powerMax: 6 },
       64: { powerMin: 2, powerMax: 4 },
-      128: { powerMin: 1.8, powerMax: 2.5 }
-    }
+      128: { powerMin: 1.8, powerMax: 2.5 },
+    };
 
     // O-mode
-    this.mode = 'list' // 'list' or 'o-mode'
-    this.containerW = 150 // O-mode container width in logical units
-    this.containerH = 180 // O-mode container height in logical units
-    this.renderScale = 4 // Canvas pixels per logical unit (canvas is 600x720, also the size of the downloaded PNG)
-    this.floaterSize = { min: 10, max: 24 } // Target size range of each drifting O, logical units
-    this.floaters = [] // All O's placed in the container
-    this.rafId = null // Current animation frame request
-    this.reducedMotion = typeof window !== 'undefined' && window.matchMedia
-      ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
-      : false
+    this.mode = "list"; // 'list' or 'o-mode'
+    this.containerW = 150; // O-mode container width in logical units
+    this.containerH = 180; // O-mode container height in logical units
+    this.renderScale = 4; // Canvas pixels per logical unit (canvas is 600x720, also the size of the downloaded PNG)
+    this.floaterSize = { min: 10, max: 24 }; // Target size range of each drifting O, logical units
+    this.floaters = []; // All O's placed in the container
+    this.rafId = null; // Current animation frame request
+    this.reducedMotion =
+      typeof window !== "undefined" && window.matchMedia
+        ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        : false;
 
     // The reserved negative-space O, centered in the container. The ratio
     // (rx / ry ≈ 1.18) is measured from the reference O. Thickness is slightly
     // bolder than the reference so it still reads among the small O's.
-    this.negativeO = { rx: 64, ry: 54, thickness: 6 }
+    this.negativeO = { rx: 64, ry: 54, thickness: 6 };
 
     // A5 mode
-    this.a5W = 148 // A5 width in mm
-    this.a5H = 210 // A5 height in mm
-    this.a5Scale = 6 // Canvas pixels per mm (canvas is 888x1260, also the size of the downloaded PNG)
-    this.a5Margin = 8 // Page margin in mm, kept empty on every side
-    this.a5CellFill = 0.8 // Fraction of each grid cell an O is allowed to fill
-    this.a5Items = [] // Sprites placed on the page, in generation order
+    this.a5W = 148; // A5 width in mm
+    this.a5H = 210; // A5 height in mm
+    this.a5Scale = 6; // Canvas pixels per mm (canvas is 888x1260, also the size of the downloaded PNG)
+    this.a5Margin = 8; // Page margin in mm, kept empty on every side
+    this.a5CellFill = 0.8; // Fraction of each grid cell an O is allowed to fill
+    this.a5Items = []; // Sprites placed on the page, in generation order
   }
 
   /**
@@ -77,7 +78,7 @@ class OGenerator extends HTMLElement {
    * Stops the O-mode animation loop.
    */
   disconnectedCallback() {
-    this.stopAnimation()
+    this.stopAnimation();
   }
 
   /**
@@ -85,8 +86,8 @@ class OGenerator extends HTMLElement {
    * Renders the template and sets up event listeners.
    */
   connectedCallback() {
-    this.render()
-    this.setUpEventListeners()
+    this.render();
+    this.setUpEventListeners();
   }
 
   /**
@@ -95,6 +96,29 @@ class OGenerator extends HTMLElement {
   render() {
     this.shadowRoot.innerHTML = `
         <style>
+
+        /* Color change animation */
+@keyframes colorchange {
+    0% {
+        color: red;
+    }
+
+    25% {
+        color: blue;
+    }
+
+    50% {
+        color: rgb(245, 225, 47);
+    }
+
+    75% {
+        color: rgb(37, 219, 79);
+    }
+
+    100% {
+        color: red;
+    }
+}
 
         :host {
   display: block;
@@ -143,8 +167,7 @@ h1 {
 }
 
 .subtitle {
-  background-color: red;
-  color: #ffffff;
+  animation: colorchange 3s steps(1) infinite;
   font-size: 1rem;
   line-height: 1.6;
   font-weight: 500;
@@ -446,7 +469,7 @@ h1 {
           <a href="https://oliverwoodhouse.com/">oliverwoodhouse.com</a></footer>
         </div>
       </div>
-        `
+        `;
   }
 
   /**
@@ -454,47 +477,66 @@ h1 {
    */
   setUpEventListeners() {
     // ASCII art below the generator. --cols lets the CSS scale the font to the widest line.
-    const asciiPre = this.shadowRoot.getElementById('asciiArt')
-    asciiPre.textContent = asciiArt
-    asciiPre.style.setProperty('--cols', Math.max(...asciiArt.split('\n').map(l => l.length)))
+    const asciiPre = this.shadowRoot.getElementById("asciiArt");
+    asciiPre.textContent = asciiArt;
+    asciiPre.style.setProperty(
+      "--cols",
+      Math.max(...asciiArt.split("\n").map((l) => l.length)),
+    );
 
-    const generateBtn = this.shadowRoot.getElementById('generateBtn')
-    const downloadAllBtn = this.shadowRoot.getElementById('downloadAllBtn')
-    const resButtons = this.shadowRoot.querySelectorAll('.res-btn')
-    const modeButtons = this.shadowRoot.querySelectorAll('.mode-btn')
+    const generateBtn = this.shadowRoot.getElementById("generateBtn");
+    const downloadAllBtn = this.shadowRoot.getElementById("downloadAllBtn");
+    const resButtons = this.shadowRoot.querySelectorAll(".res-btn");
+    const modeButtons = this.shadowRoot.querySelectorAll(".mode-btn");
 
-    generateBtn.addEventListener('click', () => this.generateO())
-    downloadAllBtn.addEventListener('click', () => this.downloadAll())
+    generateBtn.addEventListener("click", () => this.generateO());
+    downloadAllBtn.addEventListener("click", () => this.downloadAll());
 
-    resButtons.forEach(btn => {
-      btn.addEventListener('click', () => this.setResolution(parseInt(btn.dataset.size), btn, resButtons))
-    })
+    resButtons.forEach((btn) => {
+      btn.addEventListener("click", () =>
+        this.setResolution(parseInt(btn.dataset.size), btn, resButtons),
+      );
+    });
 
-    modeButtons.forEach(btn => {
-      btn.addEventListener('click', () => this.setMode(btn.dataset.mode, btn, modeButtons))
-    })
+    modeButtons.forEach((btn) => {
+      btn.addEventListener("click", () =>
+        this.setMode(btn.dataset.mode, btn, modeButtons),
+      );
+    });
 
     // O-mode controls
-    const canvas = this.shadowRoot.getElementById('omodeCanvas')
-    canvas.width = this.containerW * this.renderScale
-    canvas.height = this.containerH * this.renderScale
+    const canvas = this.shadowRoot.getElementById("omodeCanvas");
+    canvas.width = this.containerW * this.renderScale;
+    canvas.height = this.containerH * this.renderScale;
 
-    this.shadowRoot.getElementById('downloadOModeBtn').addEventListener('click', () => this.downloadOMode())
-    this.shadowRoot.getElementById('clearOModeBtn').addEventListener('click', () => this.clearOMode())
-    this.shadowRoot.getElementById('addTenBtn').addEventListener('click', () => {
-      for (let i = 0; i < 10; i++) this.generateO()
-    })
+    this.shadowRoot
+      .getElementById("downloadOModeBtn")
+      .addEventListener("click", () => this.downloadOMode());
+    this.shadowRoot
+      .getElementById("clearOModeBtn")
+      .addEventListener("click", () => this.clearOMode());
+    this.shadowRoot
+      .getElementById("addTenBtn")
+      .addEventListener("click", () => {
+        for (let i = 0; i < 10; i++) this.generateO();
+      });
 
     // A5 mode controls
-    const a5Canvas = this.shadowRoot.getElementById('a5Canvas')
-    a5Canvas.width = this.a5W * this.a5Scale
-    a5Canvas.height = this.a5H * this.a5Scale
+    const a5Canvas = this.shadowRoot.getElementById("a5Canvas");
+    a5Canvas.width = this.a5W * this.a5Scale;
+    a5Canvas.height = this.a5H * this.a5Scale;
 
-    this.shadowRoot.getElementById('downloadA5Btn').addEventListener('click', () => this.downloadA5())
-    this.shadowRoot.getElementById('clearA5Btn').addEventListener('click', () => this.clearA5())
-    this.shadowRoot.getElementById('addTenA5Btn').addEventListener('click', () => {
-      for (let i = 0; i < 10; i++) this.generateO()
-    })
+    this.shadowRoot
+      .getElementById("downloadA5Btn")
+      .addEventListener("click", () => this.downloadA5());
+    this.shadowRoot
+      .getElementById("clearA5Btn")
+      .addEventListener("click", () => this.clearA5());
+    this.shadowRoot
+      .getElementById("addTenA5Btn")
+      .addEventListener("click", () => {
+        for (let i = 0; i < 10; i++) this.generateO();
+      });
   }
 
   /**
@@ -505,24 +547,30 @@ h1 {
    * @param {NodeList} allButtons - all mode buttons, for active-state toggling
    */
   setMode(mode, activeBtn, allButtons) {
-    this.mode = mode
-    const isList = mode === 'list'
-    const isOMode = mode === 'o-mode'
-    const isA5 = mode === 'a5'
+    this.mode = mode;
+    const isList = mode === "list";
+    const isOMode = mode === "o-mode";
+    const isA5 = mode === "a5";
 
-    allButtons.forEach(b => b.classList.remove('active'))
-    activeBtn.classList.add('active')
+    allButtons.forEach((b) => b.classList.remove("active"));
+    activeBtn.classList.add("active");
 
-    this.shadowRoot.getElementById('results').classList.toggle('hidden', !isList)
-    this.shadowRoot.getElementById('omode').classList.toggle('hidden', !isOMode)
-    this.shadowRoot.getElementById('a5').classList.toggle('hidden', !isA5)
-    this.shadowRoot.getElementById('downloadAllBtn').classList.toggle('hidden', !isList || this.count === 0)
+    this.shadowRoot
+      .getElementById("results")
+      .classList.toggle("hidden", !isList);
+    this.shadowRoot
+      .getElementById("omode")
+      .classList.toggle("hidden", !isOMode);
+    this.shadowRoot.getElementById("a5").classList.toggle("hidden", !isA5);
+    this.shadowRoot
+      .getElementById("downloadAllBtn")
+      .classList.toggle("hidden", !isList || this.count === 0);
 
     // Only animate while o-mode is visible; a5 is a static layout
     if (isOMode && this.floaters.length > 0) {
-      this.requestDraw()
+      this.requestDraw();
     } else {
-      this.stopAnimation()
+      this.stopAnimation();
     }
   }
 
@@ -534,17 +582,17 @@ h1 {
    * @param {NodeList} allButtons - all submenu buttons, for active-state toggling
    */
   setResolution(size, activeBtn, allButtons) {
-    this.gridSize = size
-    this.count = 0
-    this.seen.clear()
+    this.gridSize = size;
+    this.count = 0;
+    this.seen.clear();
 
-    this.shadowRoot.getElementById('results').innerHTML = ''
-    this.shadowRoot.getElementById('downloadAllBtn').classList.add('hidden')
-    this.clearOMode()
-    this.clearA5()
+    this.shadowRoot.getElementById("results").innerHTML = "";
+    this.shadowRoot.getElementById("downloadAllBtn").classList.add("hidden");
+    this.clearOMode();
+    this.clearA5();
 
-    allButtons.forEach(b => b.classList.remove('active'))
-    activeBtn.classList.add('active')
+    allButtons.forEach((b) => b.classList.remove("active"));
+    activeBtn.classList.add("active");
   }
 
   /**
@@ -552,25 +600,25 @@ h1 {
    * list, in o-mode it is placed in the container.
    */
   generateO() {
-    const params = this.randomParams()
-    const grid = this.buildGrid(params)
+    const params = this.randomParams();
+    const grid = this.buildGrid(params);
 
-    if (this.mode === 'o-mode') {
-      this.addFloater(grid)
-      return
+    if (this.mode === "o-mode") {
+      this.addFloater(grid);
+      return;
     }
 
-    if (this.mode === 'a5') {
-      this.addA5Item(grid)
-      return
+    if (this.mode === "a5") {
+      this.addA5Item(grid);
+      return;
     }
 
-    const canvas = this.drawGrid(grid)
+    const canvas = this.drawGrid(grid);
 
-    this.count++
-    this.addResult(canvas)
+    this.count++;
+    this.addResult(canvas);
 
-    this.shadowRoot.getElementById('downloadAllBtn').classList.remove('hidden')
+    this.shadowRoot.getElementById("downloadAllBtn").classList.remove("hidden");
   }
 
   /**
@@ -580,24 +628,26 @@ h1 {
    * @returns {Object} { scaleX, scaleY, thicknessPx, power }
    */
   randomParams() {
-    const { powerMin, powerMax } = this.resolutionConfig[this.gridSize]
-    let params
-    let signature
-    let attempts = 0
+    const { powerMin, powerMax } = this.resolutionConfig[this.gridSize];
+    let params;
+    let signature;
+    let attempts = 0;
 
     do {
       params = {
         scaleX: this.randomBetween(0.55, 1.0), // Horizontal reach, fraction of max radius
         scaleY: this.randomBetween(0.55, 1.0), // Vertical reach, fraction of max radius
         thicknessPx: this.randomBetween(1, 4), // Ring thickness in grid cells — mostly thin like Cardinal Tech, with room for slightly bolder ones
-        power: this.randomBetween(powerMin, powerMax) // Superellipse exponent: lower = rounder/more geometric
-      }
-      signature = Object.values(params).map(v => v.toFixed(2)).join('|')
-      attempts++
-    } while (this.seen.has(signature) && attempts < 20)
+        power: this.randomBetween(powerMin, powerMax), // Superellipse exponent: lower = rounder/more geometric
+      };
+      signature = Object.values(params)
+        .map((v) => v.toFixed(2))
+        .join("|");
+      attempts++;
+    } while (this.seen.has(signature) && attempts < 20);
 
-    this.seen.add(signature)
-    return params
+    this.seen.add(signature);
+    return params;
   }
 
   /**
@@ -607,7 +657,7 @@ h1 {
    * @returns {number}
    */
   randomBetween(min, max) {
-    return min + Math.random() * (max - min)
+    return min + Math.random() * (max - min);
   }
 
   /**
@@ -618,31 +668,34 @@ h1 {
    * @returns {boolean[][]} grid[y][x] = true where the O should be filled
    */
   buildGrid(params) {
-    const { scaleX, scaleY, thicknessPx, power } = params
-    const size = this.gridSize
-    const center = (size - 1) / 2
-    const margin = Math.max(2, Math.round(size / 16)) // Small margin from the grid edge, scaled with size
-    const maxRadius = center - margin
-    const radiusX = maxRadius * scaleX
-    const radiusY = maxRadius * scaleY
-    const avgRadius = (radiusX + radiusY) / 2
-    const thickness = thicknessPx / avgRadius // Convert the fixed pixel thickness to a fraction of the radius
+    const { scaleX, scaleY, thicknessPx, power } = params;
+    const size = this.gridSize;
+    const center = (size - 1) / 2;
+    const margin = Math.max(2, Math.round(size / 16)); // Small margin from the grid edge, scaled with size
+    const maxRadius = center - margin;
+    const radiusX = maxRadius * scaleX;
+    const radiusY = maxRadius * scaleY;
+    const avgRadius = (radiusX + radiusY) / 2;
+    const thickness = thicknessPx / avgRadius; // Convert the fixed pixel thickness to a fraction of the radius
 
-    const grid = []
+    const grid = [];
 
     for (let y = 0; y < size; y++) {
-      const row = []
+      const row = [];
       for (let x = 0; x < size; x++) {
-        const dx = Math.abs(x - center) / radiusX
-        const dy = Math.abs(y - center) / radiusY
-        const dist = Math.pow(Math.pow(dx, power) + Math.pow(dy, power), 1 / power)
-        const isRing = dist <= 1 && dist >= 1 - thickness
-        row.push(isRing)
+        const dx = Math.abs(x - center) / radiusX;
+        const dy = Math.abs(y - center) / radiusY;
+        const dist = Math.pow(
+          Math.pow(dx, power) + Math.pow(dy, power),
+          1 / power,
+        );
+        const isRing = dist <= 1 && dist >= 1 - thickness;
+        row.push(isRing);
       }
-      grid.push(row)
+      grid.push(row);
     }
 
-    return grid
+    return grid;
   }
 
   /**
@@ -651,26 +704,26 @@ h1 {
    * @returns {HTMLCanvasElement}
    */
   drawGrid(grid) {
-    const size = this.gridSize
-    const cellPx = this.displaySize / size // Keeps every resolution at the same on-screen size
+    const size = this.gridSize;
+    const cellPx = this.displaySize / size; // Keeps every resolution at the same on-screen size
 
-    const canvas = document.createElement('canvas')
-    canvas.width = size * cellPx
-    canvas.height = size * cellPx
+    const canvas = document.createElement("canvas");
+    canvas.width = size * cellPx;
+    canvas.height = size * cellPx;
 
-    const ctx = canvas.getContext('2d')
-    ctx.clearRect(0, 0, canvas.width, canvas.height) // Transparent background, preserved in the exported PNG
-    ctx.fillStyle = '#000000'
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, canvas.width, canvas.height); // Transparent background, preserved in the exported PNG
+    ctx.fillStyle = "#000000";
 
     for (let y = 0; y < size; y++) {
       for (let x = 0; x < size; x++) {
         if (grid[y][x]) {
-          ctx.fillRect(x * cellPx, y * cellPx, cellPx, cellPx)
+          ctx.fillRect(x * cellPx, y * cellPx, cellPx, cellPx);
         }
       }
     }
 
-    return canvas
+    return canvas;
   }
 
   /**
@@ -679,25 +732,27 @@ h1 {
    * @param {HTMLCanvasElement} canvas
    */
   addResult(canvas) {
-    const results = this.shadowRoot.getElementById('results')
+    const results = this.shadowRoot.getElementById("results");
 
-    const item = document.createElement('div')
-    item.className = 'o-item'
+    const item = document.createElement("div");
+    item.className = "o-item";
 
-    const label = document.createElement('span')
-    label.className = 'o-label'
-    label.textContent = `o_${String(this.count).padStart(3, '0')}`
+    const label = document.createElement("span");
+    label.className = "o-label";
+    label.textContent = `o_${String(this.count).padStart(3, "0")}`;
 
-    const downloadBtn = document.createElement('button')
-    downloadBtn.className = 'o-download-btn'
-    downloadBtn.textContent = 'download'
-    downloadBtn.addEventListener('click', () => this.downloadCanvas(canvas, label.textContent))
+    const downloadBtn = document.createElement("button");
+    downloadBtn.className = "o-download-btn";
+    downloadBtn.textContent = "download";
+    downloadBtn.addEventListener("click", () =>
+      this.downloadCanvas(canvas, label.textContent),
+    );
 
-    item.appendChild(canvas)
-    item.appendChild(label)
-    item.appendChild(downloadBtn)
+    item.appendChild(canvas);
+    item.appendChild(label);
+    item.appendChild(downloadBtn);
 
-    results.appendChild(item)
+    results.appendChild(item);
   }
 
   /**
@@ -706,10 +761,10 @@ h1 {
    * @param {string} name - filename without extension
    */
   downloadCanvas(canvas, name) {
-    const link = document.createElement('a')
-    link.download = `${name}.png`
-    link.href = canvas.toDataURL('image/png')
-    link.click()
+    const link = document.createElement("a");
+    link.download = `${name}.png`;
+    link.href = canvas.toDataURL("image/png");
+    link.click();
   }
 
   /**
@@ -718,13 +773,13 @@ h1 {
    * downloads triggered from a single click.
    */
   downloadAll() {
-    const items = this.shadowRoot.querySelectorAll('.o-item')
+    const items = this.shadowRoot.querySelectorAll(".o-item");
 
     items.forEach((item, i) => {
-      const canvas = item.querySelector('canvas')
-      const label = item.querySelector('.o-label').textContent
-      setTimeout(() => this.downloadCanvas(canvas, label), i * 150)
-    })
+      const canvas = item.querySelector("canvas");
+      const label = item.querySelector(".o-label").textContent;
+      setTimeout(() => this.downloadCanvas(canvas, label), i * 150);
+    });
   }
 
   /**
@@ -735,45 +790,48 @@ h1 {
    * @returns {Object|null} { canvas, cellsW, cellsH, points } or null if the grid is empty
    */
   makeSprite(grid) {
-    const size = this.gridSize
-    const cells = []
-    let minX = size, minY = size, maxX = -1, maxY = -1
+    const size = this.gridSize;
+    const cells = [];
+    let minX = size,
+      minY = size,
+      maxX = -1,
+      maxY = -1;
 
     for (let y = 0; y < size; y++) {
       for (let x = 0; x < size; x++) {
-        if (!grid[y][x]) continue
-        cells.push([x, y])
-        minX = Math.min(minX, x)
-        maxX = Math.max(maxX, x)
-        minY = Math.min(minY, y)
-        maxY = Math.max(maxY, y)
+        if (!grid[y][x]) continue;
+        cells.push([x, y]);
+        minX = Math.min(minX, x);
+        maxX = Math.max(maxX, x);
+        minY = Math.min(minY, y);
+        maxY = Math.max(maxY, y);
       }
     }
 
-    if (cells.length === 0) return null
+    if (cells.length === 0) return null;
 
-    const cellsW = maxX - minX + 1
-    const cellsH = maxY - minY + 1
+    const cellsW = maxX - minX + 1;
+    const cellsH = maxY - minY + 1;
 
-    const canvas = document.createElement('canvas')
-    canvas.width = cellsW
-    canvas.height = cellsH
-    const ctx = canvas.getContext('2d')
-    ctx.fillStyle = '#000000'
-    cells.forEach(([x, y]) => ctx.fillRect(x - minX, y - minY, 1, 1))
+    const canvas = document.createElement("canvas");
+    canvas.width = cellsW;
+    canvas.height = cellsH;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#000000";
+    cells.forEach(([x, y]) => ctx.fillRect(x - minX, y - minY, 1, 1));
 
     // Evenly spaced sample points along the ring, as fractions of the sprite size (-0.5 to 0.5)
-    const stride = Math.max(1, Math.ceil(cells.length / 96))
-    const points = []
+    const stride = Math.max(1, Math.ceil(cells.length / 96));
+    const points = [];
     for (let i = 0; i < cells.length; i += stride) {
-      const [x, y] = cells[i]
+      const [x, y] = cells[i];
       points.push({
         u: (x - minX + 0.5) / cellsW - 0.5,
-        v: (y - minY + 0.5) / cellsH - 0.5
-      })
+        v: (y - minY + 0.5) / cellsH - 0.5,
+      });
     }
 
-    return { canvas, cellsW, cellsH, points }
+    return { canvas, cellsW, cellsH, points };
   }
 
   /**
@@ -786,9 +844,9 @@ h1 {
    * @returns {number} canvas pixels per grid cell
    */
   pixelScale(sprite, targetSize, pxPerUnit) {
-    const longest = Math.max(sprite.cellsW, sprite.cellsH)
-    const scale = (targetSize * pxPerUnit) / longest
-    return scale >= 1 ? Math.max(1, Math.round(scale)) : scale
+    const longest = Math.max(sprite.cellsW, sprite.cellsH);
+    const scale = (targetSize * pxPerUnit) / longest;
+    return scale >= 1 ? Math.max(1, Math.round(scale)) : scale;
   }
 
   /**
@@ -796,13 +854,13 @@ h1 {
    * @param {boolean[][]} grid
    */
   addFloater(grid) {
-    const sprite = this.makeSprite(grid)
-    if (!sprite) return
+    const sprite = this.makeSprite(grid);
+    if (!sprite) return;
 
-    const placement = this.findPlacement(sprite)
+    const placement = this.findPlacement(sprite);
     if (!placement) {
-      this.updateOModeCount(true)
-      return
+      this.updateOModeCount(true);
+      return;
     }
 
     this.floaters.push({
@@ -811,11 +869,11 @@ h1 {
       freqX: this.randomBetween(0.25, 0.7), // Slow drift, radians per second
       freqY: this.randomBetween(0.25, 0.7),
       phaseX: this.randomBetween(0, Math.PI * 2),
-      phaseY: this.randomBetween(0, Math.PI * 2)
-    })
+      phaseY: this.randomBetween(0, Math.PI * 2),
+    });
 
-    this.updateOModeCount()
-    this.requestDraw()
+    this.updateOModeCount();
+    this.requestDraw();
   }
 
   /**
@@ -827,18 +885,26 @@ h1 {
    * @returns {Object|null} { homeX, homeY, w, h, scale, ampX, ampY } or null
    */
   findPlacement(sprite) {
-    const { min, max } = this.floaterSize
-    const baseSize = this.randomBetween(min, max)
-    const shrinkSteps = [1, 0.8, 0.62, 0.48, 0.36]
+    const { min, max } = this.floaterSize;
+    const baseSize = this.randomBetween(min, max);
+    const shrinkSteps = [1, 0.8, 0.62, 0.48, 0.36];
 
     for (const factor of shrinkSteps) {
-      const scale = this.pixelScale(sprite, baseSize * factor, this.renderScale)
-      const found = this.tryPlace(sprite, scale, 60, true)
-      if (found) return found
+      const scale = this.pixelScale(
+        sprite,
+        baseSize * factor,
+        this.renderScale,
+      );
+      const found = this.tryPlace(sprite, scale, 60, true);
+      if (found) return found;
     }
 
-    const smallest = this.pixelScale(sprite, baseSize * shrinkSteps[shrinkSteps.length - 1], this.renderScale)
-    return this.tryPlace(sprite, smallest, 200, false)
+    const smallest = this.pixelScale(
+      sprite,
+      baseSize * shrinkSteps[shrinkSteps.length - 1],
+      this.renderScale,
+    );
+    return this.tryPlace(sprite, smallest, 200, false);
   }
 
   /**
@@ -852,22 +918,29 @@ h1 {
    * @returns {Object|null}
    */
   tryPlace(sprite, scale, attempts, avoidOverlap) {
-    const w = (sprite.cellsW * scale) / this.renderScale
-    const h = (sprite.cellsH * scale) / this.renderScale
-    const ampX = this.randomBetween(1, 2.2) // How far it drifts, logical units
-    const ampY = this.randomBetween(1, 2.2)
+    const w = (sprite.cellsW * scale) / this.renderScale;
+    const h = (sprite.cellsH * scale) / this.renderScale;
+    const ampX = this.randomBetween(1, 2.2); // How far it drifts, logical units
+    const ampY = this.randomBetween(1, 2.2);
 
     for (let i = 0; i < attempts; i++) {
-      const x = this.randomBetween(w / 2 + ampX, this.containerW - w / 2 - ampX)
-      const y = this.randomBetween(h / 2 + ampY, this.containerH - h / 2 - ampY)
+      const x = this.randomBetween(
+        w / 2 + ampX,
+        this.containerW - w / 2 - ampX,
+      );
+      const y = this.randomBetween(
+        h / 2 + ampY,
+        this.containerH - h / 2 - ampY,
+      );
 
-      if (this.intersectsNegativeO(sprite, x, y, w, h, ampX, ampY)) continue
-      if (avoidOverlap && this.overlapsFloaters(x, y, w, h, ampX, ampY)) continue
+      if (this.intersectsNegativeO(sprite, x, y, w, h, ampX, ampY)) continue;
+      if (avoidOverlap && this.overlapsFloaters(x, y, w, h, ampX, ampY))
+        continue;
 
-      return { homeX: x, homeY: y, w, h, scale, ampX, ampY }
+      return { homeX: x, homeY: y, w, h, scale, ampX, ampY };
     }
 
-    return null
+    return null;
   }
 
   /**
@@ -878,16 +951,16 @@ h1 {
    * @returns {boolean}
    */
   isInNegativeO(x, y) {
-    const { rx, ry, thickness } = this.negativeO
-    const dx = x - this.containerW / 2
-    const dy = y - this.containerH / 2
+    const { rx, ry, thickness } = this.negativeO;
+    const dx = x - this.containerW / 2;
+    const dy = y - this.containerH / 2;
 
-    const inOuter = (dx * dx) / (rx * rx) + (dy * dy) / (ry * ry) <= 1
-    const irx = rx - thickness
-    const iry = ry - thickness
-    const inInner = (dx * dx) / (irx * irx) + (dy * dy) / (iry * iry) < 1
+    const inOuter = (dx * dx) / (rx * rx) + (dy * dy) / (ry * ry) <= 1;
+    const irx = rx - thickness;
+    const iry = ry - thickness;
+    const inInner = (dx * dx) / (irx * irx) + (dy * dy) / (iry * iry) < 1;
 
-    return inOuter && !inInner
+    return inOuter && !inInner;
   }
 
   /**
@@ -896,18 +969,28 @@ h1 {
    * @returns {boolean}
    */
   intersectsNegativeO(sprite, x, y, w, h, ampX, ampY) {
-    const offsets = [[0, 0], [-1, -1], [1, -1], [-1, 1], [1, 1], [-1, 0], [1, 0], [0, -1], [0, 1]]
+    const offsets = [
+      [0, 0],
+      [-1, -1],
+      [1, -1],
+      [-1, 1],
+      [1, 1],
+      [-1, 0],
+      [1, 0],
+      [0, -1],
+      [0, 1],
+    ];
 
     for (const p of sprite.points) {
-      const px = x + p.u * w
-      const py = y + p.v * h
+      const px = x + p.u * w;
+      const py = y + p.v * h;
 
       for (const [ox, oy] of offsets) {
-        if (this.isInNegativeO(px + ox * ampX, py + oy * ampY)) return true
+        if (this.isInNegativeO(px + ox * ampX, py + oy * ampY)) return true;
       }
     }
 
-    return false
+    return false;
   }
 
   /**
@@ -916,15 +999,15 @@ h1 {
    * @returns {boolean}
    */
   overlapsFloaters(x, y, w, h, ampX, ampY) {
-    const gap = 0.5
+    const gap = 0.5;
 
-    return this.floaters.some(f => {
-      const a = w / 2 + ampX + f.w / 2 + f.ampX + gap
-      const b = h / 2 + ampY + f.h / 2 + f.ampY + gap
-      const dx = x - f.homeX
-      const dy = y - f.homeY
-      return (dx * dx) / (a * a) + (dy * dy) / (b * b) < 1
-    })
+    return this.floaters.some((f) => {
+      const a = w / 2 + ampX + f.w / 2 + f.ampX + gap;
+      const b = h / 2 + ampY + f.h / 2 + f.ampY + gap;
+      const dx = x - f.homeX;
+      const dy = y - f.homeY;
+      return (dx * dx) / (a * a) + (dy * dy) / (b * b) < 1;
+    });
   }
 
   /**
@@ -933,17 +1016,17 @@ h1 {
    */
   requestDraw() {
     if (this.reducedMotion) {
-      this.drawOMode(0)
-      return
+      this.drawOMode(0);
+      return;
     }
 
-    if (this.rafId !== null) return
+    if (this.rafId !== null) return;
 
     const step = (time) => {
-      this.drawOMode(time / 1000)
-      this.rafId = requestAnimationFrame(step)
-    }
-    this.rafId = requestAnimationFrame(step)
+      this.drawOMode(time / 1000);
+      this.rafId = requestAnimationFrame(step);
+    };
+    this.rafId = requestAnimationFrame(step);
   }
 
   /**
@@ -951,8 +1034,8 @@ h1 {
    */
   stopAnimation() {
     if (this.rafId !== null) {
-      cancelAnimationFrame(this.rafId)
-      this.rafId = null
+      cancelAnimationFrame(this.rafId);
+      this.rafId = null;
     }
   }
 
@@ -962,22 +1045,28 @@ h1 {
    * @param {number} t - time in seconds
    */
   drawOMode(t) {
-    const canvas = this.shadowRoot.getElementById('omodeCanvas')
-    const ctx = canvas.getContext('2d')
-    const s = this.renderScale
+    const canvas = this.shadowRoot.getElementById("omodeCanvas");
+    const ctx = canvas.getContext("2d");
+    const s = this.renderScale;
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
-    ctx.imageSmoothingQuality = 'high'
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.imageSmoothingQuality = "high";
 
-    this.floaters.forEach(f => {
-      const x = f.homeX + Math.sin(t * f.freqX + f.phaseX) * f.ampX
-      const y = f.homeY + Math.sin(t * f.freqY + f.phaseY) * f.ampY
-      const dw = f.sprite.cellsW * f.scale
-      const dh = f.sprite.cellsH * f.scale
+    this.floaters.forEach((f) => {
+      const x = f.homeX + Math.sin(t * f.freqX + f.phaseX) * f.ampX;
+      const y = f.homeY + Math.sin(t * f.freqY + f.phaseY) * f.ampY;
+      const dw = f.sprite.cellsW * f.scale;
+      const dh = f.sprite.cellsH * f.scale;
 
-      ctx.imageSmoothingEnabled = f.scale < 1 // Crisp pixels when scaled up, smooth when scaled down
-      ctx.drawImage(f.sprite.canvas, Math.round(x * s - dw / 2), Math.round(y * s - dh / 2), dw, dh)
-    })
+      ctx.imageSmoothingEnabled = f.scale < 1; // Crisp pixels when scaled up, smooth when scaled down
+      ctx.drawImage(
+        f.sprite.canvas,
+        Math.round(x * s - dw / 2),
+        Math.round(y * s - dh / 2),
+        dw,
+        dh,
+      );
+    });
   }
 
   /**
@@ -985,28 +1074,31 @@ h1 {
    * @param {boolean} full - true if the last O could not be placed
    */
   updateOModeCount(full = false) {
-    const label = this.shadowRoot.getElementById('omodeCount')
-    label.textContent = `${this.floaters.length} o's${full ? ' (container full)' : ''}`
+    const label = this.shadowRoot.getElementById("omodeCount");
+    label.textContent = `${this.floaters.length} o's${full ? " (container full)" : ""}`;
   }
 
   /**
    * Removes every O from the container.
    */
   clearOMode() {
-    this.floaters = []
-    this.stopAnimation()
+    this.floaters = [];
+    this.stopAnimation();
 
-    const canvas = this.shadowRoot.getElementById('omodeCanvas')
-    canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height)
-    this.updateOModeCount()
+    const canvas = this.shadowRoot.getElementById("omodeCanvas");
+    canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height);
+    this.updateOModeCount();
   }
 
   /**
    * Downloads the current o-mode composition as a transparent PNG.
    */
   downloadOMode() {
-    const canvas = this.shadowRoot.getElementById('omodeCanvas')
-    this.downloadCanvas(canvas, `o-mode_${String(this.floaters.length).padStart(3, '0')}`)
+    const canvas = this.shadowRoot.getElementById("omodeCanvas");
+    this.downloadCanvas(
+      canvas,
+      `o-mode_${String(this.floaters.length).padStart(3, "0")}`,
+    );
   }
 
   /**
@@ -1015,12 +1107,12 @@ h1 {
    * @param {boolean[][]} grid
    */
   addA5Item(grid) {
-    const sprite = this.makeSprite(grid)
-    if (!sprite) return
+    const sprite = this.makeSprite(grid);
+    if (!sprite) return;
 
-    this.a5Items.push(sprite)
-    this.drawA5()
-    this.updateA5Count()
+    this.a5Items.push(sprite);
+    this.drawA5();
+    this.updateA5Count();
   }
 
   /**
@@ -1031,10 +1123,10 @@ h1 {
    * @returns {Object} { cols, rows }
    */
   a5Grid(n) {
-    const aspect = this.a5W / this.a5H
-    const rows = Math.max(1, Math.ceil(Math.sqrt(n / aspect)))
-    const cols = Math.max(1, Math.ceil(n / rows))
-    return { cols, rows }
+    const aspect = this.a5W / this.a5H;
+    const rows = Math.max(1, Math.ceil(Math.sqrt(n / aspect)));
+    const cols = Math.max(1, Math.ceil(n / rows));
+    return { cols, rows };
   }
 
   /**
@@ -1043,76 +1135,79 @@ h1 {
    * there are, the smaller every cell — and therefore every O — becomes.
    */
   drawA5() {
-    const canvas = this.shadowRoot.getElementById('a5Canvas')
-    const ctx = canvas.getContext('2d')
-    ctx.clearRect(0, 0, canvas.width, canvas.height) // Transparent background, preserved in the exported PNG
+    const canvas = this.shadowRoot.getElementById("a5Canvas");
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, canvas.width, canvas.height); // Transparent background, preserved in the exported PNG
 
-    const n = this.a5Items.length
-    if (n === 0) return
+    const n = this.a5Items.length;
+    if (n === 0) return;
 
-    const { cols, rows } = this.a5Grid(n)
-    const innerW = this.a5W - this.a5Margin * 2
-    const innerH = this.a5H - this.a5Margin * 2
-    const cellW = innerW / cols
-    const cellH = innerH / rows
-    const targetSize = Math.min(cellW, cellH) * this.a5CellFill
+    const { cols, rows } = this.a5Grid(n);
+    const innerW = this.a5W - this.a5Margin * 2;
+    const innerH = this.a5H - this.a5Margin * 2;
+    const cellW = innerW / cols;
+    const cellH = innerH / rows;
+    const targetSize = Math.min(cellW, cellH) * this.a5CellFill;
 
     this.a5Items.forEach((sprite, i) => {
-      const row = Math.floor(i / cols)
-      const col = i % cols
-      const centerX = this.a5Margin + col * cellW + cellW / 2
-      const centerY = this.a5Margin + row * cellH + cellH / 2
+      const row = Math.floor(i / cols);
+      const col = i % cols;
+      const centerX = this.a5Margin + col * cellW + cellW / 2;
+      const centerY = this.a5Margin + row * cellH + cellH / 2;
 
-      const scale = this.pixelScale(sprite, targetSize, this.a5Scale)
-      const dw = sprite.cellsW * scale
-      const dh = sprite.cellsH * scale
+      const scale = this.pixelScale(sprite, targetSize, this.a5Scale);
+      const dw = sprite.cellsW * scale;
+      const dh = sprite.cellsH * scale;
 
-      ctx.imageSmoothingEnabled = scale < 1 // Crisp pixels when scaled up, smooth when scaled down
+      ctx.imageSmoothingEnabled = scale < 1; // Crisp pixels when scaled up, smooth when scaled down
       ctx.drawImage(
         sprite.canvas,
         Math.round(centerX * this.a5Scale - dw / 2),
         Math.round(centerY * this.a5Scale - dh / 2),
         dw,
-        dh
-      )
-    })
+        dh,
+      );
+    });
   }
 
   /**
    * Updates the O counter next to the a5 buttons, including the current grid shape.
    */
   updateA5Count() {
-    const n = this.a5Items.length
-    const label = this.shadowRoot.getElementById('a5Count')
+    const n = this.a5Items.length;
+    const label = this.shadowRoot.getElementById("a5Count");
 
     if (n === 0) {
-      label.textContent = `0 o's`
-      return
+      label.textContent = `0 o's`;
+      return;
     }
 
-    const { cols, rows } = this.a5Grid(n)
-    label.textContent = `${n} o's — ${cols} × ${rows} grid`
+    const { cols, rows } = this.a5Grid(n);
+    label.textContent = `${n} o's — ${cols} × ${rows} grid`;
   }
 
   /**
    * Removes every O from the A5 page.
    */
   clearA5() {
-    this.a5Items = []
+    this.a5Items = [];
 
-    const canvas = this.shadowRoot.getElementById('a5Canvas')
-    canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height)
-    this.updateA5Count()
+    const canvas = this.shadowRoot.getElementById("a5Canvas");
+    canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height);
+    this.updateA5Count();
   }
 
   /**
    * Downloads the current A5 page as a transparent PNG.
    */
   downloadA5() {
-    const canvas = this.shadowRoot.getElementById('a5Canvas')
-    this.downloadCanvas(canvas, `a5_${String(this.a5Items.length).padStart(3, '0')}`)
+    const canvas = this.shadowRoot.getElementById("a5Canvas");
+    this.downloadCanvas(
+      canvas,
+      `a5_${String(this.a5Items.length).padStart(3, "0")}`,
+    );
   }
 }
 
 // Register the custom element
-customElements.define('o-generator', OGenerator)
+customElements.define("o-generator", OGenerator);
