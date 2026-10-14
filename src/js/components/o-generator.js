@@ -465,7 +465,7 @@ h1 {
           <div class="ascii" role="img" aria-label="ascii art">
             <pre id="asciiArt" aria-hidden="true"></pre>
           </div>
-          <footer>O-GENERATOR by oliver woodhouse <br>
+          <footer>O-GENERATOR by oliver woodhouse, ABC Book letters O & D. jag hade ingen bra plats att lägga mitt namn i D så det får stå här. <br>
           <a href="https://oliverwoodhouse.com/">oliverwoodhouse.com</a></footer>
         </div>
       </div>
